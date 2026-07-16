@@ -1,0 +1,121 @@
+name: Release Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to release (e.g., v1.2.2). Leave empty for auto.'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      tag: ${{ steps.derive.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run test -- --ci --maxWorkers=2
+      - id: derive
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="v$(node -p "require('./package.json').version")"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Verify version matches package.json
+        run: |
+          PKG_VER=$(node -p "require('./package.json').version")
+          echo "Tag version: ${{ steps.derive.outputs.version }}"
+          echo "Package version: $PKG_VER"
+          [ "$PKG_VER" = "${{ steps.derive.outputs.version }}" ] || {
+            echo "ERROR: Tag version (${{ steps.derive.outputs.version }}) != package.json ($PKG_VER)"
+            exit 1
+          }
+
+  android:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - run: npm ci
+      - name: Decode release keystore
+        run: |
+          [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || { echo "ERROR: ANDROID_KEYSTORE_BASE64 missing"; exit 1; }
+          [ -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || { echo "ERROR: ANDROID_KEYSTORE_PASSWORD missing"; exit 1; }
+          [ -n "${{ secrets.ANDROID_KEY_ALIAS }}" ] || { echo "ERROR: ANDROID_KEY_ALIAS missing"; exit 1; }
+          [ -n "${{ secrets.ANDROID_KEY_PASSWORD }}" ] || { echo "ERROR: ANDROID_KEY_PASSWORD missing"; exit 1; }
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      - name: Create keystore.properties
+        run: |
+          cat > android/keystore.properties << EOF
+          RELEASE_STORE_FILE=release.keystore
+          RELEASE_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+      - name: Build universal AAB
+        run: bash gradlew bundleRelease --no-daemon
+        working-directory: android
+      - name: Build universal APK
+        run: bash gradlew assembleRelease --no-daemon
+        working-directory: android
+      - name: Sign APK verification
+        run: |
+          ls -lh android/app/build/outputs/apk/release/app-release.apk
+          ls -lh android/app/build/outputs/bundle/release/app-release.aab
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+      - name: Compute checksums
+        run: |
+          sha256sum android/app/build/outputs/apk/release/app-release.apk > Tsukiyo-${{ needs.check.outputs.version }}.apk.sha256
+          sha256sum android/app/build/outputs/bundle/release/app-release.aab > Tsukiyo-${{ needs.check.outputs.version }}.aab.sha256
+          cp android/app/build/outputs/apk/release/app-release.apk Tsukiyo-${{ needs.check.outputs.version }}.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab Tsukiyo-${{ needs.check.outputs.version }}.aab
+          APK_SHA=$(cut -d' ' -f1 Tsukiyo-${{ needs.check.outputs.version }}.apk.sha256)
+          AAB_SHA=$(cut -d' ' -f1 Tsukiyo-${{ needs.check.outputs.version }}.aab.sha256)
+          printf '## Tsukiyo v%s\n\n### Download\n- APK: `Tsukiyo-%s.apk`\n- AAB: `Tsukiyo-%s.aab`\n\n### SHA-256\n- APK: `%s`\n- AAB: `%s`\n' \
+            '${{ needs.check.outputs.version }}' \
+            '${{ needs.check.outputs.version }}' \
+            '${{ needs.check.outputs.version }}' \
+            "$APK_SHA" "$AAB_SHA" > release-notes.md
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check.outputs.tag }}
+          name: Tsukiyo ${{ needs.check.outputs.version }}
+          body_path: release-notes.md
+          files: |
+            Tsukiyo-${{ needs.check.outputs.version }}.apk
+            Tsukiyo-${{ needs.check.outputs.version }}.aab
+            Tsukiyo-${{ needs.check.outputs.version }}.apk.sha256
+            Tsukiyo-${{ needs.check.outputs.version }}.aab.sha256
+          draft: false
+          prerelease: false
