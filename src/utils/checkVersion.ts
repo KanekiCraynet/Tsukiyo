@@ -3,7 +3,7 @@ import DeviceInfo from 'react-native-device-info';
 async function getLatestVersion(): Promise<string | null> {
   try {
     const response = await fetch(
-      'https://api.github.com/repos/hxpe-dev/Tsukiyo/releases/latest',
+      'https://api.github.com/repos/KanekiCraynet/Tsukiyo/releases/latest',
     );
     const data = await response.json();
     return data.tag_name; // assumes version is stored in tag like "v1.0.0"

@@ -5,10 +5,10 @@
     <img src="./assets/banner.png" width="100%">
 </p>
 <p align="center">
-  <a href="https://github.com/hxpe-dev/Tsukiyo/releases"><img src="https://img.shields.io/github/downloads/hxpe-dev/Tsukiyo/total?color=%233DDC84&logo=android&logoColor=%23fff&style=for-the-badge"></a>
-  <a href="https://github.com/hxpe-dev/Tsukiyo/releases"><img src="https://img.shields.io/github/v/release/hxpe-dev/Tsukiyo?style=for-the-badge&logo=github"></a>
-  <a href="https://www.codefactor.io/repository/github/hxpe-dev/tsukiyo"><img src="https://img.shields.io/codefactor/grade/github/hxpe-dev/Tsukiyo?style=for-the-badge&logo=codefactor"></a>
-  <a href="https://github.com/hxpe-dev/Tsukiyo/commits"><img src="https://img.shields.io/github/last-commit/hxpe-dev/Tsukiyo?style=for-the-badge&logo=github"></a>
+  <a href="https://github.com/KanekiCraynet/Tsukiyo/releases"><img src="https://img.shields.io/github/downloads/KanekiCraynet/Tsukiyo/total?color=%233DDC84&logo=android&logoColor=%23fff&style=for-the-badge"></a>
+  <a href="https://github.com/KanekiCraynet/Tsukiyo/releases"><img src="https://img.shields.io/github/v/release/KanekiCraynet/Tsukiyo?style=for-the-badge&logo=github"></a>
+  <a href="https://www.codefactor.io/repository/github/KanekiCraynet/tsukiyo"><img src="https://img.shields.io/codefactor/grade/github/KanekiCraynet/Tsukiyo?style=for-the-badge&logo=codefactor"></a>
+  <a href="https://github.com/KanekiCraynet/Tsukiyo/commits"><img src="https://img.shields.io/github/last-commit/KanekiCraynet/Tsukiyo?style=for-the-badge&logo=github"></a>
 </p>
 
 # **Tsukiyo 🌙**
@@ -36,7 +36,7 @@ By downloading, installing, or using this application, you agree to the followin
 - **Night mode support** for comfortable reading in low light or at night
 
 ## Install (for android)
-1. Visit the latest [release page](https://github.com/hxpe-dev/Tsukiyo/releases/latest).
+1. Visit the latest [release page](https://github.com/KanekiCraynet/Tsukiyo/releases/latest).
 2. Download the `.apk` file.
 3. Open the file to install the app (you may need to grant permission to install apps from unknown sources).
 
@@ -64,7 +64,7 @@ Feel free to submit pull requests, create issues, or share your suggestions. Wha
 - [x] Basic notification system for new chapters.
 
 ## VISITORS
-<img src="https://count.getloli.com/@hxpe-dev:tsukiyo?name=visitors&theme=moebooru&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto" alt="visitors" />
+<img src="https://count.getloli.com/@KanekiCraynet:tsukiyo?name=visitors&theme=moebooru&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto" alt="visitors" />
 
 ## LICENSE 📜
 Tsukiyo is licensed under the MIT License (MIT). More info can be found [here](LICENSE.md).
