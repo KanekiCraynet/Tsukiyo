@@ -348,6 +348,21 @@ const useThemedStyles = (theme: any) =>
       marginBottom: 12,
       color: theme.text,
     },
+    sourcesContainer: {
+      padding: 16,
+    },
+    sourceButton: {
+      backgroundColor: theme.elevatedBackground,
+      borderColor: theme.border,
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 16,
+      marginBottom: 12,
+    },
+    sourceButtonText: {
+      color: theme.text,
+      fontSize: 16,
+    },
     searchContainer: {
       flexDirection: 'row',
       alignItems: 'center',

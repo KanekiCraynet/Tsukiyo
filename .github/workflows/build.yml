@@ -1,0 +1,79 @@
+name: Build mobile artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - run: npm ci
+      - name: Bundle JavaScript
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+      - name: Build standalone APK
+        working-directory: android
+        run: bash gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsukiyo-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    name: iOS simulator app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods -v 1.16.2 --no-document
+          cd ios
+          pod install --repo-update
+      - name: Build unsigned simulator app
+        run: |
+          xcodebuild \
+            -workspace ios/Tsukiyo.xcworkspace \
+            -scheme Tsukiyo \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Package app
+        run: ditto -c -k --sequesterRsrc --keepParent ios/build/Build/Products/Release-iphonesimulator/Tsukiyo.app Tsukiyo-ios-simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsukiyo-ios-simulator
+          path: Tsukiyo-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -45,9 +45,7 @@ export default function SourcesScreen() {
   const installExtension = async (url: string) => {
     try {
       setLoading(true);
-      // const rawUrl = toRawGitHubUrl(url.trim());
-      // For testing purposes
-      const rawUrl = 'https://raw.githubusercontent.com/hxpe-dev/TsukiyoExtensions/refs/heads/main/mangadex.js';
+      const rawUrl = toRawGitHubUrl(url.trim());
       const fileName = rawUrl.split('/').pop();
       if (!fileName) {
         throw new Error('Invalid filename');
