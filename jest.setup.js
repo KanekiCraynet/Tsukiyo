@@ -117,11 +117,3 @@ jest.mock('react-native-screens', () => {
     useReanimatedHeaderHeight: () => undefined,
   };
 });
-
-// react-native-dropdown-picker
-jest.mock('react-native-dropdown-picker', () => {
-  const {View} = require('react-native');
-  return {
-    default: View,
-  };
-});

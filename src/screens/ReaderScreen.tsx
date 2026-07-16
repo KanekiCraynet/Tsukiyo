@@ -28,6 +28,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import MangaReader from '../components/MangaReader';
 import WebtoonReader from '../components/WebtoonReader';
+import {isAllowedExternalNavigation} from '../utils/externalNavigation';
 
 type ReaderScreenRouteProp = RouteProp<RootStackParamList, 'Reader'>;
 
@@ -278,10 +279,25 @@ const ReaderScreen = () => {
 
   ////////////////////////////////// IF EXTERNAL //////////////////////////////////
   if (externalUrl) {
+    if (!isAllowedExternalNavigation(externalUrl, externalUrl)) {
+      return (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>External chapter URL must use HTTPS.</Text>
+        </View>
+      );
+    }
+
     return (
       <WebView
         source={{uri: externalUrl}}
         style={styles.webview}
+        originWhitelist={['https://*']}
+        javaScriptEnabled={false}
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
+        onShouldStartLoadWithRequest={request =>
+          isAllowedExternalNavigation(externalUrl, request.url)
+        }
         onLoadEnd={() => {
           saveReadingProgress(
             mangaId,

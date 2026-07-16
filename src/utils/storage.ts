@@ -8,37 +8,8 @@ import {
 } from '../types/mangadex';
 import RNFS from 'react-native-fs';
 
-// const MANGA_PLANNING_KEY = '@manga_planning'; // Static key for manga list
 const MANGA_PROGRESS_KEY = '@manga_progress'; // For reading progression
 const MANGA_DOWNLOADS_KEY = '@manga_downloads';
-
-// export const saveMangaList = async (mangaList: any[]) => {
-//   try {
-//     const jsonValue = JSON.stringify(mangaList);
-//     await AsyncStorage.setItem(mangaIdMANGA_PLANNING_KEY, jsonValue);
-//   } catch (e) {
-//     console.error('Error saving manga list', e);
-//   }
-// };
-
-// export const loadMangaListFromStorage = async () => {
-//   try {
-//     const jsonValue = await AsyncStorage.getItem(mangaIdMANGA_PLANNING_KEY);
-//     return jsonValue != null ? JSON.parse(jsonValue) : [];
-//   } catch (e) {
-//     console.error('Error loading manga list', e);
-//     return [];
-//   }
-// };
-
-// export const updateMangaList = async (updatedMangaList: any[]) => {
-//   try {
-//     const jsonValue = JSON.stringify(updatedMangaList);
-//     await AsyncStorage.setItem(mangaIdMANGA_PLANNING_KEY, jsonValue);
-//   } catch (e) {
-//     console.error('Error updating manga list', e);
-//   }
-// };
 
 export const saveReadingProgress = async (
   mangaId: string,
@@ -185,7 +156,7 @@ export const saveChapterImagesLocally = async (
   const allDownloads: MangaDownloads = raw ? JSON.parse(raw) : {};
 
   if (!allDownloads[mangaId]) {
-    allDownloads[mangaId] = {title: mangaTitle}; // Store the manga title
+    allDownloads[mangaId] = {title: mangaTitle, sourceId}; // Store the manga title + source origin
   }
 
   allDownloads[mangaId][chapterId] = localPaths; // Store local paths for chapter images
@@ -241,18 +212,22 @@ export const deleteDownloadedChapter = async (
   chapterId: string,
 ): Promise<MangaDownloads> => {
   try {
-    const path = `${RNFS.DocumentDirectoryPath}/manga/${mangaId}/${chapterId}`;
-    if (await RNFS.exists(path)) {
-      await RNFS.unlink(path);
-    }
-
     const raw = await AsyncStorage.getItem(MANGA_DOWNLOADS_KEY);
     const downloads: MangaDownloads = raw ? JSON.parse(raw) : {};
+    const entry = downloads[mangaId];
+    const sourceId = entry?.sourceId;
 
-    if (downloads[mangaId]) {
-      delete downloads[mangaId][chapterId];
+    if (sourceId) {
+      const path = `${RNFS.DocumentDirectoryPath}/manga/${sourceId}/${mangaId}/${chapterId}`;
+      if (await RNFS.exists(path)) {
+        await RNFS.unlink(path);
+      }
+    }
 
-      if (Object.keys(downloads[mangaId]).length === 0) {
+    if (entry) {
+      delete entry[chapterId];
+
+      if (!Object.values(entry).some(Array.isArray)) {
         delete downloads[mangaId];
       }
 
@@ -273,13 +248,17 @@ export const deleteDownloadedManga = async (
   mangaId: string,
 ): Promise<MangaDownloads> => {
   try {
-    const path = `${RNFS.DocumentDirectoryPath}/manga/${mangaId}`;
-    if (await RNFS.exists(path)) {
-      await RNFS.unlink(path);
-    }
-
     const raw = await AsyncStorage.getItem(MANGA_DOWNLOADS_KEY);
     const downloads: MangaDownloads = raw ? JSON.parse(raw) : {};
+    const sourceId = downloads[mangaId]?.sourceId;
+
+    if (sourceId) {
+      const path = `${RNFS.DocumentDirectoryPath}/manga/${sourceId}/${mangaId}`;
+      if (await RNFS.exists(path)) {
+        await RNFS.unlink(path);
+      }
+    }
+
     delete downloads[mangaId];
 
     await AsyncStorage.setItem(MANGA_DOWNLOADS_KEY, JSON.stringify(downloads));
@@ -312,7 +291,15 @@ const getFolderSize = async (path: string): Promise<number> => {
 };
 
 export const getMangaFolderSize = async (mangaId: string): Promise<number> => {
-  return getFolderSize(`${RNFS.DocumentDirectoryPath}/manga/${mangaId}`);
+  const raw = await AsyncStorage.getItem(MANGA_DOWNLOADS_KEY);
+  const downloads: MangaDownloads = raw ? JSON.parse(raw) : {};
+  const sourceId = downloads[mangaId]?.sourceId;
+  if (!sourceId) {
+    return 0;
+  }
+  return getFolderSize(
+    `${RNFS.DocumentDirectoryPath}/manga/${sourceId}/${mangaId}`,
+  );
 };
 
 export const formatBytes = (bytes: number): string => {

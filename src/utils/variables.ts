@@ -8,7 +8,13 @@ export const setShowRestartWarning = (val: boolean): void => {
 
 export let isConnected: boolean = false;
 
-export const updateNetworkStatus = async (): Promise<void> => {
-  const state = await NetInfo.fetch();
-  isConnected = !!state.isConnected;
+let unsubNetInfo: (() => void) | null = null;
+
+export const updateNetworkStatus = (): void => {
+  if (unsubNetInfo) {
+    unsubNetInfo();
+  }
+  unsubNetInfo = NetInfo.addEventListener(state => {
+    isConnected = !!state.isConnected;
+  });
 };

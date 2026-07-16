@@ -59,7 +59,8 @@ export interface MangaProgressEntry {
 
 export interface MangaDownloadEntry {
   title: string;
-  [chapterId: string]: string[] | string; // string[] for chapter images, string for 'title'
+  sourceId?: string;
+  [chapterId: string]: string | string[] | undefined;
 }
 
 // All downloads
