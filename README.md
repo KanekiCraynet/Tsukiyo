@@ -40,6 +40,60 @@ By downloading, installing, or using this application, you agree to the followin
 2. Download the `.apk` file.
 3. Open the file to install the app (you may need to grant permission to install apps from unknown sources).
 
+> **Note:** The `.aab` file is for Google Play only. For direct sideload, use the `.apk`.
+
+## Build & Release
+
+Releases are produced automatically by GitHub Actions. No local Android SDK required.
+
+### Prerequisites (one-time)
+- Android production keystore uploaded to repo Secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`).
+- `package.json` version must match the intended release version.
+
+### Trigger a release
+**Option A — tag push:**
+```
+git tag v1.2.3
+git push origin v1.2.3
+```
+**Option B — manual dispatch:**
+```
+gh workflow run release.yml --repo KanekiCraynet/Tsukiyo -f tag=v1.2.3
+```
+
+The `Release Android APK` workflow will:
+1. Run lint, typecheck, and tests.
+2. Decode the keystore from Secrets and sign the build.
+3. Build a signed universal APK and AAB.
+4. Verify the APK signature with apksigner.
+5. Attach APK, AAB, and SHA-256 checksums to a GitHub Release.
+
+### Version bump checklist
+Before tagging, update all version fields consistently:
+- `package.json` → `version`
+- `android/app/build.gradle` → `versionCode` (increment), `versionName`
+- `ios/Tsukiyo/Info.plist` → `CFBundleShortVersionString`, `CFBundleVersion`
+- `ios/Tsukiyo.xcodeproj/project.pbxproj` → `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`
+
+The workflow fails if the tag version does not match `package.json`.
+
+### Local debug build (optional)
+```
+npx react-native bundle --platform android --dev false \
+  --entry-file index.js \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+cd android && bash gradlew assembleDebug
+```
+
+## CI/CD
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `check.yml` | push / PR to `main` | Lint, typecheck, unit tests |
+| `build.yml` | tag `v*`, manual | Android debug APK + iOS simulator app (artifacts only) |
+| `release.yml` | tag `v*`, manual | Signed production APK + AAB → GitHub Release |
+
 ### 🚀 STAR THIS REPOSITORY TO SUPPORT THE DEVELOPER AND ENCOURAGE THE DEVELOPMENT OF THE APPLICATION!
 
 ## Want to Contribute? 🤝

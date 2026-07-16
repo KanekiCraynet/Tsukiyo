@@ -1,17 +1,31 @@
-## Steps to create a release apk
-Don't forget to **change the app version** first:  
-**For android**, change the version code and version name in [android/app/build.gradle](./android/app/build.gradle)  
-**For iOS**, change the xml and plist version in [ios/Tsukiyo/Info.plist](./ios/Tsukiyo/Info.plist) and the `MARKETING_VERSION` in [ios/Tsukiyo.xcodeproj/project.pbxproj](./ios/Tsukiyo.xcodeproj/project.pbxproj)  
-**Then, from the root folder:**
+## Release process
+
+Release builds are handled entirely by **GitHub Actions**.  You only need to:
+
+1.  Bump version in `package.json`, `android/app/build.gradle`, and iOS files (see README).
+2.  Tag and push:
+    ```
+    git tag v1.2.3
+    git push origin v1.2.3
+    ```
+    Or dispatch manually:
+    ```
+    gh workflow run release.yml --repo KanekiCraynet/Tsukiyo -f tag=v1.2.3
+    ```
+
+The workflow builds, signs, verifies, and publishes APK + AAB to GitHub Releases.
+
+## Local debug build
+
 ```
->>> cd android
->>> ./gradlew assembleRelease
+npx react-native bundle --platform android --dev false \
+  --entry-file index.js \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+cd android && bash gradlew assembleDebug
 ```
 
-## Steps to create a debug apk
-**From the root folder:**
-```
->>> npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
->>> cd android
->>> ./gradlew assembleDebug
-```
+## Keystore
+
+The production release keystore is stored at `~/.config/tsukiyo-release/`.
+**Backup this entire folder securely.** Without it, existing installations cannot be upgraded.
