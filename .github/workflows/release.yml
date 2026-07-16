@@ -14,9 +14,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.derive.outputs.version }}
       tag: ${{ steps.derive.outputs.tag }}
@@ -27,13 +32,17 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Audit production dependencies (informational)
+        run: npm audit --omit=dev || true
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm run test -- --ci --maxWorkers=2
       - id: derive
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="v$(node -p "require('./package.json').version")"
           else
@@ -43,18 +52,21 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Verify version matches package.json
+        env:
+          TAG_VERSION: ${{ steps.derive.outputs.version }}
         run: |
           PKG_VER=$(node -p "require('./package.json').version")
-          echo "Tag version: ${{ steps.derive.outputs.version }}"
+          echo "Tag version: $TAG_VERSION"
           echo "Package version: $PKG_VER"
-          [ "$PKG_VER" = "${{ steps.derive.outputs.version }}" ] || {
-            echo "ERROR: Tag version (${{ steps.derive.outputs.version }}) != package.json ($PKG_VER)"
+          [ "$PKG_VER" = "$TAG_VERSION" ] || {
+            echo "ERROR: Tag version ($TAG_VERSION) != package.json ($PKG_VER)"
             exit 1
           }
 
   android:
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -68,19 +80,28 @@ jobs:
           cache: gradle
       - run: npm ci
       - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || { echo "ERROR: ANDROID_KEYSTORE_BASE64 missing"; exit 1; }
-          [ -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || { echo "ERROR: ANDROID_KEYSTORE_PASSWORD missing"; exit 1; }
-          [ -n "${{ secrets.ANDROID_KEY_ALIAS }}" ] || { echo "ERROR: ANDROID_KEY_ALIAS missing"; exit 1; }
-          [ -n "${{ secrets.ANDROID_KEY_PASSWORD }}" ] || { echo "ERROR: ANDROID_KEY_PASSWORD missing"; exit 1; }
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          [ -n "$KEYSTORE_BASE64" ] || { echo "ERROR: ANDROID_KEYSTORE_BASE64 missing"; exit 1; }
+          [ -n "$KEYSTORE_PASSWORD" ] || { echo "ERROR: ANDROID_KEYSTORE_PASSWORD missing"; exit 1; }
+          [ -n "$KEY_ALIAS" ] || { echo "ERROR: ANDROID_KEY_ALIAS missing"; exit 1; }
+          [ -n "$KEY_PASSWORD" ] || { echo "ERROR: ANDROID_KEY_PASSWORD missing"; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
       - name: Create keystore.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cat > android/keystore.properties << EOF
           RELEASE_STORE_FILE=release.keystore
-          RELEASE_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          RELEASE_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+          RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD
+          RELEASE_KEY_ALIAS=$KEY_ALIAS
+          RELEASE_KEY_PASSWORD=$KEY_PASSWORD
           EOF
       - name: Build universal AAB
         run: bash gradlew bundleRelease --no-daemon
@@ -88,24 +109,28 @@ jobs:
       - name: Build universal APK
         run: bash gradlew assembleRelease --no-daemon
         working-directory: android
-      - name: Sign APK verification
+      - name: Verify APK signature
         run: |
           ls -lh android/app/build/outputs/apk/release/app-release.apk
           ls -lh android/app/build/outputs/bundle/release/app-release.aab
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          [ -n "$APKSIGNER" ] || { echo "ERROR: apksigner not found"; exit 1; }
+          "$APKSIGNER" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/app/release.keystore android/keystore.properties
       - name: Compute checksums
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
         run: |
-          sha256sum android/app/build/outputs/apk/release/app-release.apk > Tsukiyo-${{ needs.check.outputs.version }}.apk.sha256
-          sha256sum android/app/build/outputs/bundle/release/app-release.aab > Tsukiyo-${{ needs.check.outputs.version }}.aab.sha256
-          cp android/app/build/outputs/apk/release/app-release.apk Tsukiyo-${{ needs.check.outputs.version }}.apk
-          cp android/app/build/outputs/bundle/release/app-release.aab Tsukiyo-${{ needs.check.outputs.version }}.aab
-          APK_SHA=$(cut -d' ' -f1 Tsukiyo-${{ needs.check.outputs.version }}.apk.sha256)
-          AAB_SHA=$(cut -d' ' -f1 Tsukiyo-${{ needs.check.outputs.version }}.aab.sha256)
+          cp android/app/build/outputs/apk/release/app-release.apk "Tsukiyo-$VERSION.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "Tsukiyo-$VERSION.aab"
+          sha256sum "Tsukiyo-$VERSION.apk" > "Tsukiyo-$VERSION.apk.sha256"
+          sha256sum "Tsukiyo-$VERSION.aab" > "Tsukiyo-$VERSION.aab.sha256"
+          APK_SHA=$(cut -d' ' -f1 "Tsukiyo-$VERSION.apk.sha256")
+          AAB_SHA=$(cut -d' ' -f1 "Tsukiyo-$VERSION.aab.sha256")
           printf '## Tsukiyo v%s\n\n### Download\n- APK: `Tsukiyo-%s.apk`\n- AAB: `Tsukiyo-%s.aab`\n\n### SHA-256\n- APK: `%s`\n- AAB: `%s`\n' \
-            '${{ needs.check.outputs.version }}' \
-            '${{ needs.check.outputs.version }}' \
-            '${{ needs.check.outputs.version }}' \
-            "$APK_SHA" "$AAB_SHA" > release-notes.md
+            "$VERSION" "$VERSION" "$VERSION" "$APK_SHA" "$AAB_SHA" > release-notes.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
